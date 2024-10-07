@@ -25,7 +25,7 @@ void displayInit();
 /// @param[in] text Pointer to the text to display
 /// @param[in] bReplace If true then replace the existing line,
 ///                     otherwise scroll the text in
-void displayText( uint8_t line, char *text, bool bReplace );
+void displayText( uint8_t line, const char *text, bool bReplace );
 
 /// Set the cursor position and state (off, underline or blink).
 ///

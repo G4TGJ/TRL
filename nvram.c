@@ -10,7 +10,6 @@
  
 #include <inttypes.h>
 #include <ctype.h>
-#include <stdio.h>
 
 #include "config.h"
 #include "eeprom.h"
@@ -204,7 +203,7 @@ uint8_t nvramReadCWReverse()
 #define MAGIC 0x8402
 
 // Cached version of the NVRAM - read from the EEPROM at boot time
-static struct
+static struct __attribute__ ((__packed__)) 
 {
     uint16_t magic;                         // Magic number to check data is valid
     uint32_t xtal_freq;                     // Crystal frequency
@@ -212,7 +211,7 @@ static struct
     uint8_t  wpm;                           // Morse WPM
     enum eMorseKeyerMode morse_keyer_mode;  // Morse keyer mode
     uint8_t band;                           // Frequency band
-    bool bCWReverse;                        // True if in CW-Reverse
+    enum eTRXMode trxMode;                  // Transmit/receive mode
     enum eBacklightMode backlight_mode;     // Backlight mode
     uint8_t sidetone_volume;                // Sidetone volume
     uint16_t crc;                           // CRC to check that the data is valid
@@ -256,12 +255,14 @@ static void nvramUpdate()
 // Must be called before any operations
 void nvramInit()
 {
+    eepromInit();
+
     // Read from the EEPROM into the NVRAM cache
     for( int i = 0 ; i < sizeof( nvram_cache ) ; i++ )
     {
         ((uint8_t *) &nvram_cache)[i] = eepromRead(i);
     }
-    
+
     // Check the CRC16 and magic numbers are correct
     if( calc_crc() != nvram_cache.crc ||
         nvram_cache.magic != MAGIC)
@@ -272,11 +273,11 @@ void nvramInit()
         nvram_cache.bfo_freq = DEFAULT_BFO_FREQ;
         nvram_cache.morse_keyer_mode = DEFAULT_KEYER_MODE;
         nvram_cache.band = DEFAULT_BAND;
-        nvram_cache.bCWReverse = DEFAULT_CWREVERSE;
+        nvram_cache.trxMode = DEFAULT_TRX_MODE;
         nvram_cache.magic = MAGIC;
         nvram_cache.backlight_mode = DEFAULT_BACKLIGHT_MODE;
 #ifdef VARIABLE_SIDETONE_VOLUME
-        nvram_cache.sidetone_volume = DEFAULT_SIDETONE_PWM;
+        nvram_cache.sidetone_volume = DEFAULT_SIDETONE_VOLUME;
 #endif        
         // Calculate the CRC and write to the EEPROM
         nvramUpdate();
@@ -341,14 +342,14 @@ void nvramWriteBand( uint8_t band )
     nvramUpdate();
 }
 
-uint8_t nvramReadCWReverse()
+enum eTRXMode nvramReadTRXMode()
 {
-    return nvram_cache.bCWReverse;
+    return nvram_cache.trxMode;
 }
 
-void nvramWriteCWReverse( bool bCWReverse )
+void nvramWriteTRXMode( enum eTRXMode mode )
 {
-    nvram_cache.bCWReverse = bCWReverse;
+    nvram_cache.trxMode = mode;
     nvramUpdate();
 }
 
