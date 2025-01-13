@@ -21,6 +21,13 @@ void i2cInit();
 /// @param[in] data Data to write to register
 uint8_t i2cWriteRegister(uint8_t addr, uint8_t reg, uint8_t data);
 
+/// Write to a 9 bit register over I2C.
+///
+/// @param[in] addr I2C address
+/// @param[in] reg Register address
+/// @param[in] data Data to write to register
+uint8_t i2cWriteRegister9Bit(uint8_t addr, uint8_t reg, uint16_t data);
+
 /// Read from an 8 bit register over I2C.
 ///
 /// @param[in] addr I2C address
