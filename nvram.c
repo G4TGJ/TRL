@@ -208,7 +208,7 @@ static struct
 {
     uint16_t magic;                         // Magic number to check data is valid
     uint32_t xtal_freq;                     // Crystal frequency
-    uint32_t bfo_freq;                      // BFO frequency
+    uint32_t intermediate_freq;             // Intermediate frequency
     uint8_t  wpm;                           // Morse WPM
     enum eMorseKeyerMode morse_keyer_mode;  // Morse keyer mode
     uint8_t band;                           // Frequency band
@@ -269,7 +269,7 @@ void nvramInit()
         // CRC doesn't match so set the default values
         nvram_cache.wpm = DEFAULT_MORSE_WPM;
         nvram_cache.xtal_freq = DEFAULT_XTAL_FREQ;
-        nvram_cache.bfo_freq = DEFAULT_BFO_FREQ;
+        nvram_cache.intermediate_freq = DEFAULT_INTERMEDIATE_FREQ;
         nvram_cache.morse_keyer_mode = DEFAULT_KEYER_MODE;
         nvram_cache.band = DEFAULT_BAND;
         nvram_cache.bCWReverse = DEFAULT_CWREVERSE;
@@ -308,14 +308,14 @@ void nvramWriteXtalFreq( uint32_t freq )
     nvramUpdate();
 }
 
-uint32_t nvramReadBFOFreq()
+uint32_t nvramReadIntermediateFreq()
 {
-    return nvram_cache.bfo_freq;
+    return nvram_cache.intermediate_freq;
 }
 
-void nvramWriteBFOFreq( uint32_t freq )
+void nvramWriteIntermediateFreq( uint32_t freq )
 {
-    nvram_cache.bfo_freq = freq;
+    nvram_cache.intermediate_freq = freq;
     nvramUpdate();
 }
 
