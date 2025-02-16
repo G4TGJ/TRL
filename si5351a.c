@@ -68,10 +68,6 @@
 // si5351a default clock control value
 #define SI5351A_CLOCK_CONTROL_DEFAULT 0x0F
 
-// Clock2 is high when disabled. Others are low.
-// TODO Configure this in config.h
-#define SI_CLK2_HIGH_ON_DISABLE 0x10
-
 #define NUM_MULTISYNTH 3
 
 // Maximum number of times to poll for the system init bit clearing
@@ -757,7 +753,7 @@ bool oscInit( void )
 
         // Set the transmit clock to be high when disabled
         // Need this as the driver is an inverter and want the PA off on RX
-        i2cWriteRegister( SI5351A_I2C_ADDRESS, SI_CLK_DIS_STATE, SI_CLK2_HIGH_ON_DISABLE );
+        i2cWriteRegister( SI5351A_I2C_ADDRESS, SI_CLK_DIS_STATE, CLOCK_DISABLE_STATE );
 
         // Set the crystal load capacitance
         i2cWriteRegister( SI5351A_I2C_ADDRESS, SI_XTAL_LOAD, SI_XTAL_LOAD_CAP );
