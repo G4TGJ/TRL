@@ -26,7 +26,7 @@ static uint8_t splitPoint[LCD_HEIGHT];
 // Update the line buffer
 // Text scrolls in from the right unless bReplace is true
 // in which case the new text replaces the existing line
-void displayText( uint8_t line, char *text, bool bReplace )
+void displayText( uint8_t line, const char *text, bool bReplace )
 {
 #ifdef DISPLAY_DISABLE_SCROLLING
     // With no scrolling we just display the text on the line
@@ -88,7 +88,7 @@ void displayText( uint8_t line, char *text, bool bReplace )
         // Move to the start of the line and print the buffer
         lcdSetCursor( 0, line );
         lcdPrint( pBuf );
-        
+
         // Put the cursor back to where it was
         lcdSetCursor( cursorCol, cursorLine );
     }

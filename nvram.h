@@ -21,6 +21,16 @@ enum eBacklightMode
     NUM_BACKLIGHT_MODES
 };
 
+// Transmit/receive mode
+enum eTRXMode
+{
+    cwMode = 0,
+    cwRevMode,
+    lsbMode,
+    usbMode,
+    NUM_TRX_MODES
+};
+
 void nvramInit();
 
 uint8_t nvramReadWpm();
@@ -38,8 +48,8 @@ void nvramWriteMorseKeyerMode( enum eMorseKeyerMode );
 uint8_t nvramReadBand();
 void nvramWriteBand( uint8_t band );
 
-uint8_t nvramReadCWReverse();
-void nvramWriteCWReverse( bool bCWReverse );
+enum eTRXMode nvramReadTRXMode();
+void nvramWriteTRXMode( enum eTRXMode bCWReverse );
 
 enum eBacklightMode nvramReadBacklighMode();
 void nvramWriteBacklightMode( enum eBacklightMode );

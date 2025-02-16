@@ -43,9 +43,7 @@ void lcdIFInit()
 // Write to the I2C expander
 static void lcdI2CWrite( uint8_t value )
 {
-    // We use the pre-existing I2C send register function which actually sends the
-    // data twice (this simple device has no register addresses)
-    i2cWriteRegister( LCD_I2C_ADDRESS, value, value );
+    i2cWriteByte( LCD_I2C_ADDRESS, value );
 
     regVal = value;
 }

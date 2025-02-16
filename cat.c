@@ -22,13 +22,29 @@
 #define CAT_PARAM_POS 2
 
 // Characters representing the operating modes that are supported
+// TODO: Add SSB
 #define CW_REVERSE_TEXT '7'
 #define CW_TEXT         '3'
 
 // Return the operating mode character
 static char getModeChar()
 {
-    return nvramReadCWReverse() ? CW_REVERSE_TEXT : CW_TEXT;
+    char mode;
+
+    switch ( nvramReadTRXMode() )
+    {
+        case cwMode:
+        case lsbMode:
+        default:
+            mode = CW_TEXT;
+            break;
+
+        case cwRevMode:
+        case usbMode:
+            mode = CW_REVERSE_TEXT;
+            break;
+    }
+    return mode;
 }
 
 #define CMD_FREQUENCY_VFO_A ('F' + ('A'<<8))
@@ -206,7 +222,7 @@ static bool catOperatingMode( char *cmdText, int len )
         char opMode = cmdText[CAT_MODE_POS];
 
         // Get the current CW mode
-        char bReverseCW = nvramReadCWReverse();
+        char bReverseCW = nvramReadTRXMode() == cwRevMode;
 
         // Set the new mode if valid
         switch( opMode )

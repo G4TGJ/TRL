@@ -10,7 +10,6 @@
 // Eliminated float to just use 32 bit integers.
 //
 #include <inttypes.h>
-#include <stdio.h>
 
 #include "config.h"
 #include "i2c.h"
@@ -28,6 +27,9 @@
 #define SI_CLK0_CONTROL	16
 #define SI_CLK1_CONTROL	17
 #define SI_CLK2_CONTROL	18
+
+#define SI_CLK_DIS_STATE 24
+
 #define SI_SYNTH_PLL_A	26
 #define SI_SYNTH_PLL_B	34
 #define SI_SYNTH_MS_0	42
@@ -60,6 +62,13 @@
 
 #define SI_CLK_SRC_PLL_A	0b00000000
 #define SI_CLK_SRC_PLL_B	0b00100000
+
+#define SI_CLK_OFF 0x80 // Value to turn off the clock. Refer to SiLabs AN619 to see bit values - 0x80 turns off the output stage
+
+// si5351a default clock control value
+#define SI5351A_CLOCK_CONTROL_DEFAULT 0x0F
+
+#define NUM_MULTISYNTH 3
 
 // Maximum number of times to poll for the system init bit clearing
 #define MAX_INIT_TRIES 10000
@@ -167,36 +176,70 @@ static void setupMultisynth(uint8_t synth, uint32_t a, uint32_t b, uint32_t c, u
     uint32_t P3;					// Synth config register P3
     uint8_t  Div4 = 0;              // Divide by 4 bits
 
-    // Calculate the values as defined in AN619
-    uint32_t p = 128 * b / c;
-    P1 = 128 * a + p - 512;
-    P2 = 128 * b - c * p;
-    P3 = c;
+    // We are only going to send bytes that have changed to minimise noise
+    // from the I2C bus.
+    #define NUM_SYNTH_BYTES 8
+    static uint8_t prevSynth[NUM_MULTISYNTH][NUM_SYNTH_BYTES];
+    uint8_t newSynth[NUM_MULTISYNTH][NUM_SYNTH_BYTES];
 
-    // If the divider is 4 then special bits to set
-    if( a == 4 )
+    // Always write the first time
+    static bool bWritten[NUM_MULTISYNTH];
+
+    // Ensure synth is within range
+    if( synth < NUM_MULTISYNTH )
     {
-        Div4 = 0x0c;
-    }
+        // Calculate the values as defined in AN619
+        uint32_t p = 128 * b / c;
+        P1 = 128 * a + p - 512;
+        P2 = 128 * b - c * p;
+        P3 = c;
 
-    i2cWriteRegister(SI5351A_I2C_ADDRESS, synth + 0,   (P3 & 0x0000FF00) >> 8);
-    i2cWriteRegister(SI5351A_I2C_ADDRESS, synth + 1,   (P3 & 0x000000FF));
-    i2cWriteRegister(SI5351A_I2C_ADDRESS, synth + 2,   ((P1 & 0x00030000) >> 16) | rDiv | Div4 );
-    i2cWriteRegister(SI5351A_I2C_ADDRESS, synth + 3,   (P1 & 0x0000FF00) >> 8);
-    i2cWriteRegister(SI5351A_I2C_ADDRESS, synth + 4,   (P1 & 0x000000FF));
-    i2cWriteRegister(SI5351A_I2C_ADDRESS, synth + 5,   ((P3 & 0x000F0000) >> 12) | ((P2 & 0x000F0000) >> 16));
-    i2cWriteRegister(SI5351A_I2C_ADDRESS, synth + 6,   (P2 & 0x0000FF00) >> 8);
-    i2cWriteRegister(SI5351A_I2C_ADDRESS, synth + 7,   (P2 & 0x000000FF));
+        // If the divider is 4 then special bits to set
+        if( a == 4 )
+        {
+            Div4 = 0x0c;
+        }
+
+        // Work out the new register values
+        newSynth[synth][0] = (P3 & 0x0000FF00) >> 8;
+        newSynth[synth][1] = (P3 & 0x000000FF);
+        newSynth[synth][2] = ((P1 & 0x00030000) >> 16) | rDiv | Div4;
+        newSynth[synth][3] =  (P1 & 0x0000FF00) >> 8;
+        newSynth[synth][4] = (P1 & 0x000000FF);
+        newSynth[synth][5] = ((P3 & 0x000F0000) >> 12) | ((P2 & 0x000F0000) >> 16);
+        newSynth[synth][6] =  (P2 & 0x0000FF00) >> 8;
+        newSynth[synth][7] = (P2 & 0x000000FF);
+
+        // Write those registers that have changed
+        for( int i = 0 ; i < NUM_SYNTH_BYTES ; i++ )
+        {
+            // Write changed registers and always register 7. It appears that writing
+            // this last register latches in the new values.
+            // Always write the very first time.
+            if( !bWritten[synth] || (i == 7) || (newSynth[synth][i] != prevSynth[synth][i]) )
+            {
+                i2cWriteRegister(SI5351A_I2C_ADDRESS, SI_SYNTH_MS_0+(8*synth) + i, newSynth[synth][i]);
+                prevSynth[synth][i] = newSynth[synth][i];
+            }
+        }
+        bWritten[synth] = true;
+    }
 }
 
 //
-// Switches off Si5351a output
-// Example: si5351aOutputOff(SI_CLK0_CONTROL);
-// will switch off output CLK0
+// Set the clock control register
 //
-static void si5351aOutputOff(uint8_t clk)
+static void si5351aClockControl(uint8_t clock, uint8_t control)
 {
-    i2cWriteRegister(SI5351A_I2C_ADDRESS, clk, 0x80);		// Refer to SiLabs AN619 to see bit values - 0x80 turns off the output stage
+    // Keep track of the current value
+    static uint8_t currentControl[NUM_CLOCKS];
+
+    // Only write if the register has changed
+    if( (clock < NUM_CLOCKS) && (control != currentControl[clock]) )
+    {
+        i2cWriteRegister(SI5351A_I2C_ADDRESS, SI_CLK0_CONTROL+clock, control);
+        currentControl[clock] = control;
+    }
 }
 
 // Enable/disable the clock output
@@ -205,31 +248,40 @@ static void si5351aOutputOff(uint8_t clk)
 // bEnable true to enable and false to disable
 static void si5351aOutputEnable( uint8_t clk, bool bEnable )
 {
-    uint8_t reg;
+    // Keep track of the register state
+    static uint8_t currentReg;
+    uint8_t reg = currentReg;
 
-    // Read the existing register
-    if( i2cReadRegister(SI5351A_I2C_ADDRESS, SI_CLK_ENABLE, &reg) == 0 )
+    if( bEnable )
     {
-        if( bEnable )
-        {
-            // Enable by clearing the bit
-            reg &= ~clk;
-        }
-        else
-        {
-            // Disable by setting the bit
-            reg |= clk;
-        }
+        // Enable by clearing the bit
+        reg &= ~clk;
+    }
+    else
+    {
+        // Disable by setting the bit
+        reg |= clk;
+    }
+
+    // Only write to the register if it needs to change
+    if( reg != currentReg )
+    {
         i2cWriteRegister( SI5351A_I2C_ADDRESS, SI_CLK_ENABLE, reg );
+        currentReg = reg;
     }
 }
 
 // Enable/disable a clock output
 void oscClockEnable( uint8_t clock, bool bEnable )
 {
-    if( clock < NUM_CLOCKS )
+    // Keep track of the enabled state
+    static bool bEnabled[NUM_CLOCKS];
+
+    // Only write to the clock if its state has changed
+    if( (clock < NUM_CLOCKS) && bEnabled[clock] != bEnable )
     {
         si5351aOutputEnable( SI_CLK_ENABLE_0 << clock, bEnable );
+        bEnabled[clock] = bEnable;
     }
 }
 
@@ -328,6 +380,7 @@ static uint32_t getMultisynthDivider( uint32_t frequency, bool bQuadrature )
             divider = 4;
         }
     }
+
     return divider;
 }
 
@@ -453,6 +506,24 @@ static uint8_t getRDiv( uint32_t *pFreq )
         rDiv = SI_R_DIV_1;
     }
     return rDiv;
+}
+
+// Set the quadrature for clocks 0 and 1
+static void si5351aSetQuadrature( uint8_t q0, uint8_t q1 )
+{
+    // Keep track of values and only write if they change
+    static uint8_t currentQ0, currentQ1;
+
+    if( q0 != currentQ0 )
+    {
+        i2cWriteRegister(SI5351A_I2C_ADDRESS, SI_CLK0_PHOFF, q0);
+        currentQ0 = q0;
+    }
+    if( q1 != currentQ1 )
+    {
+        i2cWriteRegister(SI5351A_I2C_ADDRESS, SI_CLK1_PHOFF, q1);
+        currentQ1 = q1;
+    }
 }
 
 // Set the clock to the given frequency with optional quadrature.
@@ -581,7 +652,7 @@ void oscSetFrequency( uint8_t clock, uint32_t frequency, int8_t q )
         // represented by constants SI_R_DIV1 to SI_R_DIV128 (see si5351a.h header file)
         // If you want to output frequencies below 1MHz, you have to use the
         // final R division stage
-        setupMultisynth(SI_SYNTH_MS_0+(8*firstClock), a, b, c, rDiv[firstClock]);
+        setupMultisynth(firstClock, a, b, c, rDiv[firstClock]);
 
         // Delay needed for it to take changes
         delay(1);
@@ -591,29 +662,26 @@ void oscSetFrequency( uint8_t clock, uint32_t frequency, int8_t q )
         {
             if( quadrature < 0)
             {
-                i2cWriteRegister(SI5351A_I2C_ADDRESS, SI_CLK0_PHOFF, 0);
-                i2cWriteRegister(SI5351A_I2C_ADDRESS, SI_CLK1_PHOFF, a);
+                si5351aSetQuadrature( 0, a );
             }
             else if( quadrature > 0)
             {
-                i2cWriteRegister(SI5351A_I2C_ADDRESS, SI_CLK0_PHOFF, a);
-                i2cWriteRegister(SI5351A_I2C_ADDRESS, SI_CLK1_PHOFF, 0);
+                si5351aSetQuadrature( a, 0 );
             }
             else
             {
-                i2cWriteRegister(SI5351A_I2C_ADDRESS, SI_CLK0_PHOFF, 0);
-                i2cWriteRegister(SI5351A_I2C_ADDRESS, SI_CLK1_PHOFF, 0);
+                si5351aSetQuadrature( 0, 0 );
             }
         }
 
         // Switch on the clock
-        i2cWriteRegister(SI5351A_I2C_ADDRESS, SI_CLK0_CONTROL+clock, 0x4F | pll_clock);
+        si5351aClockControl(clock, SI5351A_CLOCK_CONTROL_DEFAULT | pll_clock);
 
         // If we are setting clock 0 then we need to also set the multisynth divider for
         // clock 1 because it also uses PLL A
         if( firstClock == 0 )
         {
-            setupMultisynth(SI_SYNTH_MS_1, a1, b1, c1, rDiv[1]);
+            setupMultisynth(1, a1, b1, c1, rDiv[1]);
 
             delay(1);
         }
@@ -646,7 +714,7 @@ bool oscInit( void )
 {
     int i;
     uint8_t regVal;
-    
+
     // We talk to the chip over I2C
     i2cInit();
 
@@ -678,9 +746,14 @@ bool oscInit( void )
         si5351aOutputEnable( SI_CLK_ENABLE_0 | SI_CLK_ENABLE_1 | SI_CLK_ENABLE_2, false );
 
         // Power down all the output drivers
-        si5351aOutputOff(SI_CLK0_CONTROL);
-        si5351aOutputOff(SI_CLK1_CONTROL);
-        si5351aOutputOff(SI_CLK2_CONTROL);
+        for( int clock = 0; clock < NUM_CLOCKS ; clock++ )
+        {
+            si5351aClockControl(clock, SI_CLK_OFF);
+        }
+
+        // Set the transmit clock to be high when disabled
+        // Need this as the driver is an inverter and want the PA off on RX
+        i2cWriteRegister( SI5351A_I2C_ADDRESS, SI_CLK_DIS_STATE, CLOCK_DISABLE_STATE );
 
         // Set the crystal load capacitance
         i2cWriteRegister( SI5351A_I2C_ADDRESS, SI_XTAL_LOAD, SI_XTAL_LOAD_CAP );

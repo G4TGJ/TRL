@@ -12,14 +12,15 @@
 #include "pushbutton.h"
 #include "io.h"
 
-// Read the rotary control and decide which direction it is moving in
+// Read any rotary control and decide which direction it is moving in
 // Also handle the pushbutton. Debounce it and decide if it's a short or long press
 //
+// int   rotaryNum      Number of the rotary to read
 // bool *pbCW           Pointer to a boolean that is set to true if control turned clockwise
 // bool *pbCCW          Pointer to a boolean that is set to true if control turned counter clockwise
 // bool *pbShortPress   Pointer to a boolean that is set to true if the pushbutton is pressed for a short time
 // bool *pbLongPress    Pointer to a boolean that is set to true if the pushbutton is pressed for a long time
-void readRotary( bool *pbCW, bool *pbCCW, bool *pbShortPress, bool *pbLongPress )
+void readRotary( int rotaryNum, bool *pbCW, bool *pbCCW, bool *pbShortPress, bool *pbLongPress )
 {
     // State of the rotary control
     bool bRotaryA;
@@ -27,14 +28,14 @@ void readRotary( bool *pbCW, bool *pbCCW, bool *pbShortPress, bool *pbLongPress 
     bool bRotarySw;
 
     // Keep track of the the rotary control states
-    static bool prevbRotaryA;
-    static bool prevbRotaryB;
+    static bool prevbRotaryA[NUM_ROTARIES];
+    static bool prevbRotaryB[NUM_ROTARIES];
 
     // Switch debounce state
-    static struct sDebounceState debounceState;
+    static struct sDebounceState debounceState[NUM_ROTARIES];
 
-    // Check that the pointers are sane
-    if( pbCW && pbCCW && pbShortPress && pbLongPress)
+    // Check that the rotary number and pointers are sane
+    if( (rotaryNum < NUM_ROTARIES) && pbCW && pbCCW && pbShortPress && pbLongPress)
     {
         // Start by assuming nothing pressed
         *pbCW = false;
@@ -43,14 +44,14 @@ void readRotary( bool *pbCW, bool *pbCCW, bool *pbShortPress, bool *pbLongPress 
         *pbLongPress = false;
 
         // Read the rotary control
-        ioReadRotary( &bRotaryA, &bRotaryB, &bRotarySw );
+        ioReadRotary( rotaryNum, &bRotaryA, &bRotaryB, &bRotarySw );
 
         // Debounce the pushbutton
-        debouncePushbutton( bRotarySw, pbShortPress, pbLongPress, ROTARY_BUTTON_DEBOUNCE_TIME, ROTARY_LONG_PRESS_TIME, &debounceState);
+        debouncePushbutton( bRotarySw, pbShortPress, pbLongPress, ROTARY_BUTTON_DEBOUNCE_TIME, ROTARY_LONG_PRESS_TIME, &debounceState[rotaryNum]);
 
         // Only do something with the rotary control if there is a change
-        if( (bRotaryA != prevbRotaryA) ||
-        (bRotaryB != prevbRotaryB) )
+        if( (bRotaryA != prevbRotaryA[rotaryNum]) ||
+        (bRotaryB != prevbRotaryB[rotaryNum]) )
         {
             // We need to debounce the control
             // The two outputs run in a set sequence so we ensure this is
@@ -116,8 +117,8 @@ void readRotary( bool *pbCW, bool *pbCCW, bool *pbShortPress, bool *pbLongPress 
                     *pbCCW = true;
                 }
             }
-            prevbRotaryA = bRotaryA;
-            prevbRotaryB = bRotaryB;
+            prevbRotaryA[rotaryNum] = bRotaryA;
+            prevbRotaryB[rotaryNum] = bRotaryB;
         }
     }
 }

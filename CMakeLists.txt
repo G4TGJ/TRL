@@ -6,6 +6,7 @@ target_sources(TRL INTERFACE
     display.c
     display.h
     eeprom.h
+    font.c
     i2c.h
     lcd.c
     lcd.h
