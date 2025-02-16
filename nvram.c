@@ -10,6 +10,7 @@
  
 #include <inttypes.h>
 #include <ctype.h>
+#include <stddef.h>
 
 #include "config.h"
 #include "eeprom.h"
